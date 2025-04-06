@@ -1,82 +1,148 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { ParamsDictionary } from 'express-serve-static-core'; // Импорт ParamsDictionary
 import User from '../models/user.model';
-import { generateToken } from '../utils/generateToken';
+import { Course } from '../models/course.model';
+import bcryptjs from 'bcryptjs';
+import mongoose from 'mongoose';
+import { UserRole } from '../models/user.model';
 
-interface MongoError extends Error {
-  code?: number;
+interface RegisterRequestBody {
+  firstName: string;
+  lastName: string;
+  username: string;
+  password: string;
+  role?: UserRole;
 }
 
-const isAlpha = (str: string): boolean => /^[A-Za-zА-Яа-яЁё]+$/.test(str);
+interface AuthenticatedRequest extends Request {
+  user?: {
+    userId: string;
+    role: UserRole;
+  };
+}
 
-export const registerUser = async (req: Request, res: Response): Promise<void> => {
-  const { firstName, lastName, username, password, role } = req.body;
-
-  if (!isAlpha(firstName) || !isAlpha(lastName)) {
-    res.status(400).json({ message: 'Имя и фамилия должны содержать только буквы.' });
-    return;
-  }
-
+export const registerUser = async (
+  req: Request<Record<string, never>, object, RegisterRequestBody>,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const existingUser = await User.findOne({ username });
+    const { firstName, lastName, username, password, role } = req.body;
 
+    const existingUser = await User.findOne({ username });
     if (existingUser) {
-      res.status(400).json({ message: 'Пользователь с таким логином уже существует' });
+      res.status(400).json({ message: 'Username already exists' });
       return;
     }
 
-    // Исправленное использование строки
-    const user = new User({ 
-      firstName, 
-      lastName, 
-      username, 
-      password, 
-      role // Строка (например, "admin")
+    const hashedPassword = await bcryptjs.hash(password, 10);
+    const user = new User({
+      firstName,
+      lastName,
+      username,
+      password: hashedPassword,
+      role: role || 'student',
     });
 
     await user.save();
-    const token = generateToken(user._id.toString(), user.role); // Строка
-    res.status(201).json({ token });
+    res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
-    console.error('Ошибка при регистрации:', error);
-    const mongoError = error as MongoError;
+    next(error);
+  }
+};
 
-    if (mongoError.code === 11000) {
-      res.status(400).json({ message: 'Пользователь с таким логином уже существует' });
+export const deleteUser = async (
+  req: Request<ParamsDictionary>,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userObjectId = new mongoose.Types.ObjectId(req.params.id);
+    const user = await User.findByIdAndDelete(userObjectId);
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getUserProfile = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userObjectId = new mongoose.Types.ObjectId(req.user?.userId as string);
+    const user = await User.findById(userObjectId)
+      .select('-password')
+      .populate('favorites');
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const toggleFavorite = async (
+  req: Request<ParamsDictionary>,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+
+    const courseObjectId = new mongoose.Types.ObjectId(courseId);
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    const course = await Course.findById(courseObjectId);
+    if (!course) {
+      res.status(404).json({ message: 'Course not found' });
+      return;
+    }
+
+    const user = await User.findById(userObjectId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const favoriteIndex = user.favorites.findIndex((fav) => fav.toString() === courseObjectId.toString());
+
+    if (favoriteIndex === -1) {
+      user.favorites.push(courseObjectId);
+      course.favorites.push(userObjectId);
     } else {
-      res.status(500).json({ message: 'Ошибка при регистрации пользователя' });
+      user.favorites.splice(favoriteIndex, 1);
+      const userIndexInCourse = course.favorites.findIndex((fav) => fav.toString() === userObjectId.toString());
+      if (userIndexInCourse !== -1) {
+        course.favorites.splice(userIndexInCourse, 1);
+      }
     }
-  }
-};
 
-export const deleteUser = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
-      res.status(404).json({ message: 'Пользователь не найден' });
-      return;
-    }
-    res.status(200).json({ message: 'Пользователь успешно удален' });
+    await Promise.all([user.save(), course.save()]);
+
+    res.json({
+      message:
+        favoriteIndex === -1 ? 'Course added to favorites' : 'Course removed from favorites',
+      favorites: user.favorites,
+    });
   } catch (error) {
-    console.error('Ошибка при удалении пользователя:', error);
-    res.status(500).json({ message: 'Ошибка при удалении пользователя' });
-  }
-};
-
-export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: 'Пользователь не аутентифицирован' });
-      return;
-    }
-
-    const user = await User.findById(req.user.userId).select('-password');
-    if (!user) {
-      res.status(404).json({ message: 'Пользователь не найден' });
-      return;
-    }
-    res.status(200).json(user);
-  } catch (error) {
-    console.error('Ошибка при получении профиля пользователя:', error);
-    res.status(500).json({ message: 'Ошибка при получении профиля пользователя' });
+    next(error);
   }
 };

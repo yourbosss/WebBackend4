@@ -20,13 +20,10 @@ export interface ICourse extends mongoose.Document {
   tags: mongoose.Types.ObjectId[];
   favorites: mongoose.Types.ObjectId[];
   createdAt: Date;
+  updatedAt: Date;
 }
 
-interface CourseModel extends mongoose.Model<ICourse> {
-  createWithSlug(courseData: Omit<ICourse, 'slug' | 'createdAt' | '_id' | keyof mongoose.Document>): Promise<ICourse>;
-}
-
-const courseSchema = new mongoose.Schema<ICourse, CourseModel>({
+const courseSchema = new mongoose.Schema<ICourse>({
   title: { 
     type: String, 
     required: [true, 'Title is required'],
@@ -78,12 +75,9 @@ const courseSchema = new mongoose.Schema<ICourse, CourseModel>({
   favorites: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
-  }],
-  createdAt: { 
-    type: Date, 
-    default: Date.now,
-    required: true 
-  }
+  }]
+}, {
+  timestamps: true
 });
 
 courseSchema.pre<ICourse>('validate', function(next) {
@@ -98,19 +92,4 @@ courseSchema.pre<ICourse>('validate', function(next) {
   next();
 });
 
-courseSchema.statics.createWithSlug = async function(courseData) {
-  const baseSlug = slugify(courseData.title, {
-    lower: true,
-    strict: true,
-    trim: true
-  });
-  const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
-  
-  return this.create({ 
-    ...courseData, 
-    slug,
-    createdAt: new Date()
-  });
-};
-
-export const Course = mongoose.model<ICourse, CourseModel>('Course', courseSchema);
+export const Course = mongoose.model<ICourse>('Course', courseSchema);

@@ -1,25 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import User from '../models/user.model';
+import { UserRole } from '../models/user.model';
+
+interface IUser {
+  _id: string;
+  username: string;
+  password: string;
+  role: UserRole;
+}
 
 declare module 'express' {
   interface Request {
     user?: {
       userId: string;
-      role: string; // Строка вместо enum
+      role: UserRole;
     };
   }
 }
 
-interface DecodedToken {
-  userId: string;
-  role: string;
-}
-
-export const authenticateToken = (
+export const authenticateToken = async (
   req: Request,
   res: Response,
   next: NextFunction
-): void => {
+): Promise<void> => {
   try {
     const authHeader = req.headers['authorization'];
     
@@ -34,29 +38,33 @@ export const authenticateToken = (
       return;
     }
 
-    jwt.verify(token, process.env.JWT_SECRET!, (err: Error | null, decoded: unknown) => {
-      if (err) {
-        console.error('Token verification error:', err.message);
-        res.status(403).json({ message: 'Invalid or expired token' });
-        return;
-      }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { 
+      userId: string; 
+      role: UserRole;
+    };
 
-      const payload = decoded as DecodedToken;
+    const user = await User.findById(decoded.userId).lean() as IUser | null;
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
 
-      // Проверка роли как строки
-      if (!['student', 'teacher', 'admin'].includes(payload.role)) {
-        res.status(403).json({ message: 'Invalid user role' });
-        return;
-      }
+    req.user = {
+      userId: user._id,
+      role: user.role
+    };
 
-      req.user = {
-        userId: payload.userId,
-        role: payload.role // Строка
-      };
-
-      next();
-    });
+    next();
   } catch (error) {
-    next(error);
+    console.error('Authentication error:', error);
+    if (error instanceof jwt.TokenExpiredError) {
+      res.status(401).json({ message: 'Token expired' });
+      return;
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.status(401).json({ message: 'Invalid token' });
+      return;
+    }
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
