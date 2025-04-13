@@ -146,7 +146,7 @@ export const getCourse = async (
   try {
     const course = await Course.findById(req.params.id).populate('author tags');
     if (!course) {
-      res.status(404).json({ success: false, message: 'Курс не найден' });
+      res.status(404).json({ success: false, message: 'Course not found' });
       return;
     }
     res.status(200).json({ success: true, data: course });
@@ -164,7 +164,7 @@ export const createCourse = async (
     const { title, description, price, image, category, level, published = false, tags = [] } = req.body;
 
     if (!req.user?.userId) {
-      res.status(401).json({ success: false, message: 'Не авторизован' });
+      res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
 
@@ -229,7 +229,7 @@ export const updateCourse = async (
     const course = await Course.findByIdAndUpdate(id, updateData, { new: true }).populate('author tags');
 
     if (!course) {
-      res.status(404).json({ success: false, message: 'Курс не найден' });
+      res.status(404).json({ success: false, message: 'Course not found' });
       return;
     }
 
@@ -250,11 +250,11 @@ export const deleteCourse = async (
     const course = await Course.findByIdAndDelete(id);
 
     if (!course) {
-      res.status(404).json({ success: false, message: 'Курс не найден' });
+      res.status(404).json({ success: false, message: 'Course not found' });
       return;
     }
 
-    res.status(200).json({ success: true, message: 'Курс удалён' });
+    res.status(200).json({ success: true, message: 'Course deleted' });
   } catch (error) {
     next(error);
   }
@@ -276,7 +276,7 @@ export const toggleFavorite = async (
 ): Promise<void> => {
   try {
     if (!req.user?.userId) {
-      res.status(401).json({ success: false, message: 'Не авторизован' });
+      res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
 
@@ -284,7 +284,7 @@ export const toggleFavorite = async (
     const course = await Course.findById(id);
 
     if (!course) {
-      res.status(404).json({ success: false, message: 'Курс не найден' });
+      res.status(404).json({ success: false, message: 'Course not found' });
       return;
     }
 

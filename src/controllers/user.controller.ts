@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { ParamsDictionary } from 'express-serve-static-core'; // Импорт ParamsDictionary
-import User from '../models/user.model';
 import { Course } from '../models/course.model';
+import User from '../models/user.model';
 import bcryptjs from 'bcryptjs';
 import mongoose from 'mongoose';
 import { UserRole } from '../models/user.model';
@@ -52,7 +51,7 @@ export const registerUser = async (
 };
 
 export const deleteUser = async (
-  req: Request<ParamsDictionary>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -94,7 +93,7 @@ export const getUserProfile = async (
 };
 
 export const toggleFavorite = async (
-  req: Request<ParamsDictionary>,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -103,7 +102,7 @@ export const toggleFavorite = async (
     const userId = req.user?.userId;
 
     if (!userId) {
-      res.status(401).json({ message: 'User not authenticated' });
+      res.status(401).json({ message: 'Unauthorized' });
       return;
     }
 
@@ -138,10 +137,27 @@ export const toggleFavorite = async (
     await Promise.all([user.save(), course.save()]);
 
     res.json({
-      message:
-        favoriteIndex === -1 ? 'Course added to favorites' : 'Course removed from favorites',
+      message: favoriteIndex === -1 ? 'Course added to favorites' : 'Course removed from favorites',
       favorites: user.favorites,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCreatedCourses = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user?.userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const courses = await Course.find({ author: req.user.userId });
+    res.status(200).json(courses);
   } catch (error) {
     next(error);
   }

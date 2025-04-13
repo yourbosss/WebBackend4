@@ -11,7 +11,6 @@ declare global {
   }
 }
 
-// Расширяем интерфейс Express для Multer
 declare global {
   namespace Express {
     interface Multer {

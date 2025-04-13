@@ -10,15 +10,6 @@ interface IUser {
   role: UserRole;
 }
 
-declare module 'express' {
-  interface Request {
-    user?: {
-      userId: string;
-      role: UserRole;
-    };
-  }
-}
-
 export const authenticateToken = async (
   req: Request,
   res: Response,
@@ -28,7 +19,7 @@ export const authenticateToken = async (
     const authHeader = req.headers['authorization'];
     
     if (!authHeader) {
-      res.status(401).json({ message: 'Authorization header is missing' });
+      res.status(401).json({ message: 'Authorization header missing' });
       return;
     }
 
@@ -38,25 +29,21 @@ export const authenticateToken = async (
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { 
+    const { userId, role } = jwt.verify(token, process.env.JWT_SECRET!) as { 
       userId: string; 
       role: UserRole;
     };
 
-    const user = await User.findById(decoded.userId).lean() as IUser | null;
+    const user = await User.findById(userId).lean() as IUser | null;
     if (!user) {
       res.status(404).json({ message: 'User not found' });
       return;
     }
 
-    req.user = {
-      userId: user._id,
-      role: user.role
-    };
+    req.user = { userId, role };
 
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
     if (error instanceof jwt.TokenExpiredError) {
       res.status(401).json({ message: 'Token expired' });
       return;

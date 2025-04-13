@@ -13,11 +13,9 @@ import multer from 'multer';
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
 
-// GET маршруты
 router.get('/', getCourses);
 router.get('/:id', getCourse);
 
-// POST/PUT/DELETE маршруты с аутентификацией
 router.post(
   '/',
   authenticateToken,

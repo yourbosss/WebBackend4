@@ -17,14 +17,14 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     const user = await User.findOne({ username }).lean() as IUser | null;
 
     if (!user || user.password !== password) {
-      res.status(401).json({ message: 'Неверный логин или пароль' });
+      res.status(401).json({ message: 'Invalid username or password' });
       return;
     }
 
     const token = generateToken(user._id, user.role);
     res.status(200).json({ success: true, token });
   } catch (error) {
-    console.error('Ошибка при авторизации:', error);
-    res.status(500).json({ message: 'Ошибка при авторизации' });
+    console.error('Authentication error:', error);
+    res.status(500).json({ message: 'Authentication error' });
   }
 };

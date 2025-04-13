@@ -6,7 +6,7 @@ export function errorHandlerMiddleware(
   res: Response,
   next: NextFunction
 ): void {
-  console.error(`Ошибка: ${err.message}`);
+  console.error(`Error: ${err.message}`);
 
   if (res.headersSent) {
     return next(err);
@@ -14,7 +14,7 @@ export function errorHandlerMiddleware(
 
   res.status(500).json({
     success: false,
-    message: err.message || "Внутренняя ошибка сервера",
+    message: err.message || "Internal Server Error",
     stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
   });
 }
