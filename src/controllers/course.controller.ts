@@ -47,80 +47,99 @@ type QueryType = {
   category?: string;
   level?: string;
   price?: PriceQuery;
-  tags?: { $in: Types.ObjectId[] };
+  tags?: { $in: string[] };
   author?: Types.ObjectId;
   published?: boolean;
   title?: { $regex: string; $options: string };
-  _id?: { $in: Types.ObjectId[] };
+  _id?: { $in: string[] };
 };
 
 type EmptyObject = Record<string, never>;
 
+const processTags = async (tags: string[]): Promise<string[]> => {
+  const tagIds: string[] = [];
+  for (const tagName of tags) {
+    const tag = await TagModel.findOneAndUpdate(
+      { name: tagName.trim() },
+      { $setOnInsert: { name: tagName.trim() } },
+      { upsert: true, new: true }
+    );
+    tagIds.push((tag._id as Types.ObjectId).toString());
+  }
+  return tagIds;
+};
+
+const buildSearchQuery = (search?: string) => {
+  if (!search) return {};
+  return { title: { $regex: search, $options: 'i' } };
+};
+
+const buildPriceQuery = (priceMin?: string, priceMax?: string) => {
+  const priceQuery: QueryType['price'] = {};
+  if (priceMin) priceQuery.$gte = Number(priceMin);
+  if (priceMax) priceQuery.$lte = Number(priceMax);
+  return Object.keys(priceQuery).length > 0 ? { price: priceQuery } : {};
+};
+
+const buildPagination = (page: string, limit: string) => {
+  const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+  const limitNumber = Math.max(1, parseInt(limit, 10) || 10);
+  return {
+    skip: (pageNumber - 1) * limitNumber,
+    limit: limitNumber,
+    page: pageNumber,
+  };
+};
+
+const verifyAuthentication = (req: AuthenticatedRequest) => {
+  if (!req.user?.userId) {
+    throw new Error('Unauthorized');
+  }
+  return req.user.userId;
+};
+
 export const getCourses = async (
-  req: Request<EmptyObject, EmptyObject, EmptyObject, GetCoursesQueryParams>,
+  req: Request<EmptyObject, EmptyObject, EmptyObject, GetCoursesQueryParams> & { user?: { userId: string; role: UserRole } },
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    const {
-      category,
-      level,
-      priceMin,
-      priceMax,
-      tags,
-      author,
-      published,
-      favorites,
-      search,
-      sortBy = '-createdAt',
-      page = '1',
-      limit = '10',
-    } = req.query;
+    const { category, level, priceMin, priceMax, tags, author, published, favorites, search, sortBy = '-createdAt', page = '1', limit = '10' } = req.query;
 
-    const query: QueryType = {};
-
-    if (category) query.category = category;
-    if (level) query.level = level;
-    if (published) query.published = published === 'true';
-
-    if (priceMin || priceMax) {
-      query.price = {};
-      if (priceMin) query.price.$gte = Number(priceMin);
-      if (priceMax) query.price.$lte = Number(priceMax);
-    }
+    const queryConditions: QueryType = {
+      ...(category && { category }),
+      ...(level && { level }),
+      ...(published && { published: published === 'true' }),
+      ...buildPriceQuery(priceMin, priceMax),
+      ...buildSearchQuery(search),
+    };
 
     if (tags) {
-      const tagNames = tags.split(',');
-      const tagIds = await TagModel.find({ name: { $in: tagNames } }).select('_id');
-      query.tags = { $in: tagIds.map(tag => tag._id as Types.ObjectId) };
+      const tagIds = await processTags(tags.split(','));
+      queryConditions.tags = { $in: tagIds };
     }
 
     if (author) {
-      query.author = new Types.ObjectId(author);
-    }
-
-    if (search) {
-      query.title = { $regex: search, $options: 'i' };
+      queryConditions.author = new Types.ObjectId(author);
     }
 
     if (favorites === 'true' && req.user?.userId) {
       const user = await User.findById(req.user.userId);
-      if (user) {
-        query._id = { $in: user.favorites };
+      if (user && Array.isArray(user.favorites)) {
+        const favIds = user.favorites.map(id => id.toString());
+        queryConditions._id = { $in: favIds };
       }
     }
 
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
-    const skip = (pageNumber - 1) * limitNumber;
+    const { skip, limit: limitNumber, page: pageNumber } = buildPagination(page, limit);
 
     const [courses, total] = await Promise.all([
-      Course.find(query)
+      Course.find(queryConditions)
         .sort(sortBy)
         .skip(skip)
         .limit(limitNumber)
         .populate('author tags'),
-      Course.countDocuments(query),
+      Course.countDocuments(queryConditions),
     ]);
 
     res.status(200).json({
@@ -142,7 +161,7 @@ export const getCourse = async (
   req: Request<{ id: string }>,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const course = await Course.findById(req.params.id).populate('author tags');
     if (!course) {
@@ -159,42 +178,21 @@ export const createCourse = async (
   req: AuthenticatedRequest & { body: CourseRequestBody },
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    const { title, description, price, image, category, level, published = false, tags = [] } = req.body;
+    const userId = verifyAuthentication(req);
+    const { tags = [], ...courseData } = req.body;
 
-    if (!req.user?.userId) {
-      res.status(401).json({ success: false, message: 'Unauthorized' });
-      return;
-    }
+    const tagIds = await processTags(tags);
 
-    const tagIds = await Promise.all(
-      tags.map(async (tagName: string) => {
-        const tag = await TagModel.findOneAndUpdate(
-          { name: tagName.trim() },
-          { $setOnInsert: { name: tagName.trim() } },
-          { upsert: true, new: true }
-        );
-        return tag._id as Types.ObjectId;
-      })
-    );
-
-    const courseData = {
-      title,
-      description,
-      price,
-      image,
-      category,
-      level,
-      published,
-      author: new Types.ObjectId(req.user.userId),
+    const newCourse = await Course.create({
+      ...courseData,
+      author: new Types.ObjectId(userId),
       tags: tagIds,
       favorites: [],
-    };
+    });
 
-    const course = await Course.create(courseData);
-    const populatedCourse = await course.populate(['author', 'tags']);
-
+    const populatedCourse = await newCourse.populate(['author', 'tags']);
     res.status(201).json({ success: true, data: populatedCourse });
   } catch (error) {
     next(error);
@@ -205,24 +203,15 @@ export const updateCourse = async (
   req: AuthenticatedRequest & { body: Partial<CourseRequestBody> },
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const { id } = req.params;
     const { tags, ...rest } = req.body;
 
-    const updateData: Partial<CourseRequestBody & { tags?: Types.ObjectId[] }> = { ...rest };
+    const updateData: Partial<CourseRequestBody & { tags?: string[] }> = { ...rest };
 
     if (tags) {
-      const tagIds = await Promise.all(
-        tags.map(async (tagName: string) => {
-          const tag = await TagModel.findOneAndUpdate(
-            { name: tagName.trim() },
-            { $setOnInsert: { name: tagName.trim() } },
-            { upsert: true, new: true }
-          );
-          return tag._id as Types.ObjectId;
-        })
-      );
+      const tagIds = await processTags(tags);
       updateData.tags = tagIds;
     }
 
@@ -243,7 +232,7 @@ export const deleteCourse = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
     const { id } = req.params;
 
@@ -273,14 +262,11 @@ export const toggleFavorite = async (
   req: AuthenticatedRequest,
   res: Response<ToggleFavoriteResponse>,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    if (!req.user?.userId) {
-      res.status(401).json({ success: false, message: 'Unauthorized' });
-      return;
-    }
-
+    const userId = verifyAuthentication(req);
     const { id } = req.params;
+
     const course = await Course.findById(id);
 
     if (!course) {
@@ -288,11 +274,10 @@ export const toggleFavorite = async (
       return;
     }
 
-    const userId = new Types.ObjectId(req.user.userId);
-    const index = course.favorites.indexOf(userId);
+    const index = course.favorites.findIndex(favId => favId.toString() === userId);
 
     if (index === -1) {
-      course.favorites.push(userId);
+      course.favorites.push(new Types.ObjectId(userId));
     } else {
       course.favorites.splice(index, 1);
     }
