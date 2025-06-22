@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Course } from '../models/course.model';
-import User from '../models/user.model';
+import { User } from '../models/user.model'; 
 import bcryptjs from 'bcryptjs';
 import mongoose from 'mongoose';
 import { UserRole } from '../models/user.model';
@@ -51,7 +51,7 @@ export const registerUser = async (
 };
 
 export const deleteUser = async (
-  req: Request,
+  req: Request<{ id: string }>,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -79,7 +79,7 @@ export const getUserProfile = async (
     const userObjectId = new mongoose.Types.ObjectId(req.user?.userId as string);
     const user = await User.findById(userObjectId)
       .select('-password')
-      .populate('favorites');
+      .populate('favoriteCourseIds');
 
     if (!user) {
       res.status(404).json({ message: 'User not found' });
@@ -93,7 +93,7 @@ export const getUserProfile = async (
 };
 
 export const toggleFavorite = async (
-  req: Request,
+  req: Request<{ courseId: string }, unknown, unknown, unknown> & { user?: { userId: string } },
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -121,16 +121,16 @@ export const toggleFavorite = async (
       return;
     }
 
-    const favoriteIndex = user.favorites.findIndex((fav) => fav.toString() === courseObjectId.toString());
+    const favoriteIndex = user.favoriteCourseIds.findIndex((fav: mongoose.Types.ObjectId) => fav.toString() === courseObjectId.toString());
 
     if (favoriteIndex === -1) {
-      user.favorites.push(courseObjectId);
-      course.favorites.push(userObjectId);
+      user.favoriteCourseIds.push(courseObjectId);
+      course.favoriteUserIds.push(userObjectId);
     } else {
-      user.favorites.splice(favoriteIndex, 1);
-      const userIndexInCourse = course.favorites.findIndex((fav) => fav.toString() === userObjectId.toString());
+      user.favoriteCourseIds.splice(favoriteIndex, 1);
+      const userIndexInCourse = course.favoriteUserIds.findIndex((fav: mongoose.Types.ObjectId) => fav.toString() === userObjectId.toString());
       if (userIndexInCourse !== -1) {
-        course.favorites.splice(userIndexInCourse, 1);
+        course.favoriteUserIds.splice(userIndexInCourse, 1);
       }
     }
 
@@ -138,7 +138,7 @@ export const toggleFavorite = async (
 
     res.json({
       message: favoriteIndex === -1 ? 'Course added to favorites' : 'Course removed from favorites',
-      favorites: user.favorites,
+      favorites: user.favoriteCourseIds,
     });
   } catch (error) {
     next(error);
@@ -156,7 +156,7 @@ export const getCreatedCourses = async (
       return;
     }
 
-    const courses = await Course.find({ author: req.user.userId });
+    const courses = await Course.find({ authorId: req.user.userId });
     res.status(200).json(courses);
   } catch (error) {
     next(error);

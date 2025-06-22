@@ -16,9 +16,9 @@ export interface ICourse extends mongoose.Document {
   category: string;
   level: CourseLevel;
   published: boolean;
-  author: mongoose.Types.ObjectId;
-  tags: mongoose.Types.ObjectId[];
-  favorites: mongoose.Types.ObjectId[];
+  authorId: mongoose.Types.ObjectId;
+  tagIds: mongoose.Types.ObjectId[];
+  favoriteUserIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,16 +63,16 @@ const courseSchema = new mongoose.Schema<ICourse>({
     type: Boolean, 
     default: false 
   },
-  author: { 
+  authorId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
     required: true 
   },
-  tags: [{ 
+  tagIds: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Tag' 
   }],
-  favorites: [{ 
+  favoriteUserIds: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
   }]

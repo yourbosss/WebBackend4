@@ -5,7 +5,7 @@ export interface ILesson extends mongoose.Document {
   title: string;
   content?: string;
   videoUrl?: string;
-  course: mongoose.Types.ObjectId;
+  courseId: mongoose.Types.ObjectId;
   order?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -32,7 +32,7 @@ const lessonSchema = new mongoose.Schema<ILesson>({
       message: 'Invalid URL format'
     }
   },
-  course: {
+  courseId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
     required: [true, 'Course reference is required'],
@@ -54,7 +54,7 @@ const lessonSchema = new mongoose.Schema<ILesson>({
 
 lessonSchema.pre<ILesson>('save', async function (next) {
   if (!this.order) {
-    const maxOrderLesson = await Lesson.findOne({ course: this.course })
+    const maxOrderLesson = await Lesson.findOne({ courseId: this.courseId })
       .sort('-order')
       .select('order');
 

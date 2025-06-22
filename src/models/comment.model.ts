@@ -3,15 +3,15 @@ import { Lesson } from './lesson.model';
 import { IUser } from './user.model';
 
 export interface IComment extends mongoose.Document {
-  user: mongoose.Types.ObjectId;
-  lesson: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  lessonId: mongoose.Types.ObjectId;
   text: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const commentSchema = new mongoose.Schema<IComment>({
-  user: {
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: [true, 'User reference is required'],
@@ -23,7 +23,7 @@ const commentSchema = new mongoose.Schema<IComment>({
       message: 'User does not exist'
     }
   },
-  lesson: {
+  lessonId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lesson',
     required: [true, 'Lesson reference is required'],

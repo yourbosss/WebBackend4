@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Course } from '../models/course.model';
-import TagModel from '../models/tag.model';
-import User from '../models/user.model';
+import { Tag } from '../models/tag.model';
+import { User } from '../models/user.model';
 import { Types } from 'mongoose';
 import { UserRole } from '../models/user.model';
 
@@ -47,8 +47,8 @@ type QueryType = {
   category?: string;
   level?: string;
   price?: PriceQuery;
-  tags?: { $in: string[] };
-  author?: Types.ObjectId;
+  tagIds?: { $in: string[] };
+  authorId?: Types.ObjectId;
   published?: boolean;
   title?: { $regex: string; $options: string };
   _id?: { $in: string[] };
@@ -59,7 +59,7 @@ type EmptyObject = Record<string, never>;
 const processTags = async (tags: string[]): Promise<string[]> => {
   const tagIds: string[] = [];
   for (const tagName of tags) {
-    const tag = await TagModel.findOneAndUpdate(
+    const tag = await Tag.findOneAndUpdate(
       { name: tagName.trim() },
       { $setOnInsert: { name: tagName.trim() } },
       { upsert: true, new: true }
@@ -116,17 +116,17 @@ export const getCourses = async (
 
     if (tags) {
       const tagIds = await processTags(tags.split(','));
-      queryConditions.tags = { $in: tagIds };
+      queryConditions.tagIds = { $in: tagIds };
     }
 
     if (author) {
-      queryConditions.author = new Types.ObjectId(author);
+      queryConditions.authorId = new Types.ObjectId(author);
     }
 
     if (favorites === 'true' && req.user?.userId) {
       const user = await User.findById(req.user.userId);
-      if (user && Array.isArray(user.favorites)) {
-        const favIds = user.favorites.map(id => id.toString());
+      if (user && Array.isArray(user.favoriteCourseIds)) {
+        const favIds = user.favoriteCourseIds.map(id => id.toString());
         queryConditions._id = { $in: favIds };
       }
     }
@@ -138,7 +138,7 @@ export const getCourses = async (
         .sort(sortBy)
         .skip(skip)
         .limit(limitNumber)
-        .populate('author tags'),
+        .populate('authorId tagIds'),
       Course.countDocuments(queryConditions),
     ]);
 
@@ -158,12 +158,12 @@ export const getCourses = async (
 };
 
 export const getCourse = async (
-  req: Request<{ id: string }>,
+  req: Request<{ id: string }, unknown, unknown>,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const course = await Course.findById(req.params.id).populate('author tags');
+    const course = await Course.findById(req.params.id).populate('authorId tagIds');
     if (!course) {
       res.status(404).json({ success: false, message: 'Course not found' });
       return;
@@ -187,12 +187,12 @@ export const createCourse = async (
 
     const newCourse = await Course.create({
       ...courseData,
-      author: new Types.ObjectId(userId),
-      tags: tagIds,
-      favorites: [],
+      authorId: new Types.ObjectId(userId),
+      tagIds,
+      favoriteUserIds: [],
     });
 
-    const populatedCourse = await newCourse.populate(['author', 'tags']);
+    const populatedCourse = await newCourse.populate(['authorId', 'tagIds']);
     res.status(201).json({ success: true, data: populatedCourse });
   } catch (error) {
     next(error);
@@ -200,7 +200,7 @@ export const createCourse = async (
 };
 
 export const updateCourse = async (
-  req: AuthenticatedRequest & { body: Partial<CourseRequestBody> },
+  req: AuthenticatedRequest & Request<{ id: string }, unknown, Partial<CourseRequestBody>>,
   res: Response,
   next: NextFunction
 ) => {
@@ -208,14 +208,14 @@ export const updateCourse = async (
     const { id } = req.params;
     const { tags, ...rest } = req.body;
 
-    const updateData: Partial<CourseRequestBody & { tags?: string[] }> = { ...rest };
+    const updateData: Partial<CourseRequestBody & { tagIds?: string[] }> = { ...rest };
 
     if (tags) {
       const tagIds = await processTags(tags);
-      updateData.tags = tagIds;
+      updateData.tagIds = tagIds;
     }
 
-    const course = await Course.findByIdAndUpdate(id, updateData, { new: true }).populate('author tags');
+    const course = await Course.findByIdAndUpdate(id, updateData, { new: true }).populate('authorId tagIds');
 
     if (!course) {
       res.status(404).json({ success: false, message: 'Course not found' });
@@ -229,7 +229,7 @@ export const updateCourse = async (
 };
 
 export const deleteCourse = async (
-  req: AuthenticatedRequest,
+  req: AuthenticatedRequest & Request<{ id: string }>,
   res: Response,
   next: NextFunction
 ) => {
@@ -249,18 +249,9 @@ export const deleteCourse = async (
   }
 };
 
-interface ToggleFavoriteResponse {
-  success: boolean;
-  data?: {
-    isFavorite: boolean;
-    favoritesCount: number;
-  };
-  message?: string;
-}
-
 export const toggleFavorite = async (
-  req: AuthenticatedRequest,
-  res: Response<ToggleFavoriteResponse>,
+  req: AuthenticatedRequest & Request<{ id: string }>,
+  res: Response,
   next: NextFunction
 ) => {
   try {
@@ -274,12 +265,12 @@ export const toggleFavorite = async (
       return;
     }
 
-    const index = course.favorites.findIndex(favId => favId.toString() === userId);
+    const index = course.favoriteUserIds.findIndex(favId => favId.toString() === userId);
 
     if (index === -1) {
-      course.favorites.push(new Types.ObjectId(userId));
+      course.favoriteUserIds.push(new Types.ObjectId(userId));
     } else {
-      course.favorites.splice(index, 1);
+      course.favoriteUserIds.splice(index, 1);
     }
 
     await course.save();
@@ -288,7 +279,7 @@ export const toggleFavorite = async (
       success: true,
       data: {
         isFavorite: index === -1,
-        favoritesCount: course.favorites.length,
+        favoritesCount: course.favoriteUserIds.length,
       },
     });
   } catch (error) {

@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
     required: true,
     default: 'student'
   },
-  favorites: [{ 
+  favoriteCourseIds: [{ 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Course' 
   }]
@@ -28,9 +28,9 @@ export interface IUser extends mongoose.Document {
   username: string;
   password: string;
   role: UserRole;
-  favorites: mongoose.Types.ObjectId[];
+  favoriteCourseIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-export default mongoose.model<IUser>('User', userSchema);
+export const User = mongoose.model<IUser>('User', userSchema);

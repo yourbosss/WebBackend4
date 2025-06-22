@@ -31,5 +31,4 @@ tagSchema.pre('save', function(next) {
   next();
 });
 
-const Tag = mongoose.model<ITag>('Tag', tagSchema);
-export default Tag;
+export const Tag = mongoose.model<ITag>('Tag', tagSchema);

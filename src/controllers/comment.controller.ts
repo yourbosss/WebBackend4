@@ -15,9 +15,9 @@ export const getComments = async (
   try {
     const { lessonId } = req.params;
 
-    const comments = await Comment.find({ lesson: lessonId })
+    const comments = await Comment.find({ lessonId })
       .sort('-createdAt')
-      .populate('user', 'firstName lastName');
+      .populate('userId', 'firstName lastName');
 
     res.status(200).json({
       success: true,
@@ -34,13 +34,13 @@ export const createComment = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { lessonId } = req.params;
-    const { text } = req.body;
-
     if (!req.user?.userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
+
+    const { lessonId } = req.params;
+    const { text } = req.body;
 
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) {
@@ -49,12 +49,12 @@ export const createComment = async (
     }
 
     const comment = await Comment.create({
-      user: req.user.userId,
-      lesson: lessonId,
+      userId: req.user.userId,
+      lessonId,
       text
     });
 
-    const populatedComment = await comment.populate('user', 'firstName lastName');
+    const populatedComment = await comment.populate('userId', 'firstName lastName');
 
     res.status(201).json({ success: true, data: populatedComment });
   } catch (error) {
@@ -68,13 +68,13 @@ export const updateComment = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { id } = req.params;
-    const { text } = req.body;
-
     if (!req.user?.userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
+
+    const { id } = req.params;
+    const { text } = req.body;
 
     const comment = await Comment.findById(id);
     if (!comment) {
@@ -82,7 +82,7 @@ export const updateComment = async (
       return;
     }
 
-    if (comment.user.toString() !== req.user.userId) {
+    if (comment.userId.toString() !== req.user.userId) {
       res.status(403).json({ success: false, message: 'Not authorized to update this comment' });
       return;
     }
@@ -91,7 +91,7 @@ export const updateComment = async (
       id,
       { text },
       { new: true, runValidators: true }
-    ).populate('user', 'firstName lastName');
+    ).populate('userId', 'firstName lastName');
 
     res.status(200).json({ success: true, data: updatedComment });
   } catch (error) {
@@ -105,12 +105,12 @@ export const deleteComment = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { id } = req.params;
-
     if (!req.user?.userId) {
       res.status(401).json({ success: false, message: 'Unauthorized' });
       return;
     }
+
+    const { id } = req.params;
 
     const comment = await Comment.findById(id);
     if (!comment) {
@@ -118,7 +118,7 @@ export const deleteComment = async (
       return;
     }
 
-    if (comment.user.toString() !== req.user.userId && req.user.role !== 'admin') {
+    if (comment.userId.toString() !== req.user.userId && req.user.role !== 'admin') {
       res.status(403).json({ success: false, message: 'Not authorized to delete this comment' });
       return;
     }

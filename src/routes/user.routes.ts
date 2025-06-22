@@ -5,13 +5,13 @@ import {
   toggleFavorite,
   getCreatedCourses
 } from '../controllers/user.controller';
-import { authenticateToken } from '../middleware/authenticateToken';
+import { checkAuthentication } from '../middleware/checkAuthentication';
 
 const router = Router();
 
-router.delete('/:id', authenticateToken, deleteUser);
-router.get('/profile', authenticateToken, getUserProfile);
-router.post('/favorites/:courseId', authenticateToken, toggleFavorite);
-router.get('/my-courses', authenticateToken, getCreatedCourses);
+router.delete('/:id', checkAuthentication, deleteUser);
+router.get('/profile', checkAuthentication, getUserProfile);
+router.post('/favorites/:courseId', checkAuthentication, toggleFavorite);
+router.get('/my-courses', checkAuthentication, getCreatedCourses);
 
 export default router;

@@ -6,7 +6,7 @@ import {
   updateLesson,
   deleteLesson
 } from '../controllers/lesson.controller';
-import { authenticateToken } from '../middleware/authenticateToken';
+import { checkAuthentication } from '../middleware/checkAuthentication';
 import { authorizeRoles } from '../middleware/authorizeRoles';
 
 const router = Router();
@@ -14,25 +14,8 @@ const router = Router();
 router.get('/:courseId/lessons', getLessons);
 router.get('/lessons/:id', getLesson);
 
-router.post(
-  '/:courseId/lessons',
-  authenticateToken,
-  authorizeRoles('teacher', 'admin'),
-  createLesson
-);
-
-router.put(
-  '/lessons/:id',
-  authenticateToken,
-  authorizeRoles('teacher', 'admin'),
-  updateLesson
-);
-
-router.delete(
-  '/lessons/:id',
-  authenticateToken,
-  authorizeRoles('teacher', 'admin'),
-  deleteLesson
-);
+router.post('/:courseId/lessons', checkAuthentication, authorizeRoles('teacher', 'admin'), createLesson);
+router.put('/lessons/:id', checkAuthentication, authorizeRoles('teacher', 'admin'), updateLesson);
+router.delete('/lessons/:id', checkAuthentication, authorizeRoles('teacher', 'admin'), deleteLesson);
 
 export default router;

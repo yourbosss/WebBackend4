@@ -19,9 +19,9 @@ export const getLessons = async (
   try {
     const { courseId } = req.params;
 
-    const lessons = await Lesson.find({ course: courseId })
+    const lessons = await Lesson.find({ courseId })
       .sort('order')
-      .populate('course', 'title');
+      .populate('courseId', 'title');
 
     res.status(200).json({
       success: true,
@@ -38,7 +38,7 @@ export const getLesson = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const lesson = await Lesson.findById(req.params.id).populate('course', 'title');
+    const lesson = await Lesson.findById(req.params.id).populate('courseId', 'title');
 
     if (!lesson) {
       res.status(404).json({ success: false, message: 'Lesson not found' });
@@ -57,6 +57,11 @@ export const createLesson = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    if (!req.user?.userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
     const { courseId } = req.params;
     const { title, content, videoUrl, order } = req.body;
 
@@ -67,8 +72,8 @@ export const createLesson = async (
     }
 
     if (
-      course.author.toString() !== req.user?.userId &&
-      req.user?.role !== 'admin'
+      course.authorId.toString() !== req.user.userId &&
+      req.user.role !== 'admin'
     ) {
       res.status(403).json({ success: false, message: 'Not authorized to add lessons to this course' });
       return;
@@ -78,7 +83,7 @@ export const createLesson = async (
       title,
       content,
       videoUrl,
-      course: courseId,
+      courseId,
       order
     });
 
@@ -94,6 +99,11 @@ export const updateLesson = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    if (!req.user?.userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
     const { id } = req.params;
     const { title, content, videoUrl, order } = req.body;
 
@@ -103,11 +113,11 @@ export const updateLesson = async (
       return;
     }
 
-    const course = await Course.findById(lesson.course);
+    const course = await Course.findById(lesson.courseId);
     if (
       !course ||
-      (course.author.toString() !== req.user?.userId &&
-        req.user?.role !== 'admin')
+      (course.authorId.toString() !== req.user.userId &&
+        req.user.role !== 'admin')
     ) {
       res.status(403).json({ success: false, message: 'Not authorized to update this lesson' });
       return;
@@ -131,6 +141,11 @@ export const deleteLesson = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    if (!req.user?.userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
     const { id } = req.params;
 
     const lesson = await Lesson.findById(id);
@@ -139,18 +154,18 @@ export const deleteLesson = async (
       return;
     }
 
-    const course = await Course.findById(lesson.course);
+    const course = await Course.findById(lesson.courseId);
     if (
       !course ||
-      (course.author.toString() !== req.user?.userId &&
-        req.user?.role !== 'admin')
+      (course.authorId.toString() !== req.user.userId &&
+        req.user.role !== 'admin')
     ) {
       res.status(403).json({ success: false, message: 'Not authorized to delete this lesson' });
       return;
     }
 
     await Lesson.deleteOne({ _id: id });
-    await mongoose.model('Comment').deleteMany({ lesson: id });
+    await mongoose.model('Comment').deleteMany({ lessonId: id });
 
     res.status(200).json({ success: true, message: 'Lesson deleted' });
   } catch (error) {

@@ -5,25 +5,13 @@ import {
   updateComment,
   deleteComment
 } from '../controllers/comment.controller';
-import { authenticateToken } from '../middleware/authenticateToken';
+import { checkAuthentication } from '../middleware/checkAuthentication';
 
 const router = Router();
 
 router.get('/:lessonId/comments', getComments);
-router.post(
-  '/:lessonId/comments',
-  authenticateToken,
-  createComment
-);
-router.put(
-  '/comments/:id',
-  authenticateToken,
-  updateComment
-);
-router.delete(
-  '/comments/:id',
-  authenticateToken,
-  deleteComment
-);
+router.post('/:lessonId/comments', checkAuthentication, createComment);
+router.put('/comments/:id', checkAuthentication, updateComment);
+router.delete('/comments/:id', checkAuthentication, deleteComment);
 
 export default router;
