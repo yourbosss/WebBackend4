@@ -1,34 +1,35 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export interface IEnrollment extends mongoose.Document {
-  studentId: mongoose.Types.ObjectId;
-  courseId: mongoose.Types.ObjectId;
-  completedLessonIds: mongoose.Types.ObjectId[];
+export interface IEnrollment extends Document {
+  studentId: Types.ObjectId;
+  courseId: Types.ObjectId;
+  completedLessonIds: Types.ObjectId[];
+  progress: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const enrollmentSchema = new mongoose.Schema<IEnrollment>({
+const enrollmentSchema = new Schema<IEnrollment>({
   studentId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
   },
   courseId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Course',
     required: true,
   },
   completedLessonIds: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Lesson',
-    default: []
-  }]
-}, {
-  timestamps: true
-});
-
-
-enrollmentSchema.index({ studentId: 1, courseId: 1 }, { unique: true });
+  }],
+  progress: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100,
+  }
+}, { timestamps: true });
 
 export const Enrollment = mongoose.model<IEnrollment>('Enrollment', enrollmentSchema);

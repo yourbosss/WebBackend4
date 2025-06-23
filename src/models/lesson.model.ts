@@ -27,7 +27,7 @@ const lessonSchema = new mongoose.Schema<ILesson>({
     trim: true,
     validate: {
       validator: (value: string) => {
-        return /^(http|https):\/\/[^ "]+$/.test(value);
+        return !value || /^(http|https):\/\/[^ "]+$/.test(value);
       },
       message: 'Invalid URL format'
     }
@@ -57,7 +57,6 @@ lessonSchema.pre<ILesson>('save', async function (next) {
     const maxOrderLesson = await Lesson.findOne({ courseId: this.courseId })
       .sort('-order')
       .select('order');
-
     this.order = (maxOrderLesson?.order ?? 0) + 1;
   }
   next();
